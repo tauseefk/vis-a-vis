@@ -21,6 +21,16 @@ pub enum TileType {
     Opaque,
 }
 
+impl From<&char> for TileType {
+    fn from(value: &char) -> Self {
+        match value {
+            'x' => TileType::Opaque,
+            '_' => TileType::Transparent,
+            _ => panic!("Encountered improbably tiletype"),
+        }
+    }
+}
+
 pub struct Visibility<'test> {
     world: &'test World,
     is_omniscient: bool,
@@ -29,7 +39,7 @@ pub struct Visibility<'test> {
 
 impl<'test> Visibility<'test> {
     pub fn is_tile_visible(&self, observer_coords: &GridCoords, tile_coords: &GridCoords) -> bool {
-        // TODO: this should prob happen at the world construction level
+        // TODO: this should prob happen at the world construction
         if self.world.tiles.len() < 1 {
             panic!("World is too small.");
         }
@@ -82,8 +92,9 @@ mod tests {
 
     #[test]
     fn returns_true_for_itself() {
+        let tiles: Vec<char> = vec!['_'];
         let world = World {
-            tiles: vec![TileType::Transparent],
+            tiles: tiles.iter().map(|value| value.into()).collect(),
             width: 1,
             height: 1,
         };
@@ -104,8 +115,9 @@ mod tests {
 
     #[test]
     fn returns_true_for_visible_tile() {
+        let tiles = vec!['_', '_'];
         let world = World {
-            tiles: vec![TileType::Transparent, TileType::Transparent],
+            tiles: tiles.iter().map(|value| value.into()).collect(),
             width: 2,
             height: 1,
         };
@@ -126,12 +138,10 @@ mod tests {
 
     #[test]
     fn returns_false_for_hidden_tile() {
+        let tiles = vec!['_', 'x', '_'];
+
         let world = World {
-            tiles: vec![
-                TileType::Transparent,
-                TileType::Opaque,
-                TileType::Transparent,
-            ],
+            tiles: tiles.iter().map(|value| value.into()).collect(),
             width: 3,
             height: 1,
         };
