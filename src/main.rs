@@ -24,7 +24,7 @@ pub enum TileType {
 impl From<&char> for TileType {
     fn from(value: &char) -> Self {
         match value {
-            'x' => TileType::Opaque,
+            'o' => TileType::Opaque,
             '_' => TileType::Transparent,
             _ => panic!("Encountered improbably tiletype"),
         }
@@ -58,14 +58,32 @@ impl<'test> Visibility<'test> {
             false
         }
     }
-    pub fn get_visible_tiles(&self, _observer_coords: &GridCoords) -> HashSet<GridCoords> {
+
+    pub fn compute_visible_tiles(&self, _observer_coords: &GridCoords) -> HashSet<GridCoords> {
         HashSet::new()
+    }
+
+    fn grid_coord_to_idx(&self, tile_coords: &GridCoords) -> usize {
+        if !self.is_in_bounds(tile_coords) {
+            panic!("Tile not in bounds");
+        }
+
+        let w = self.world.width;
+
+        (tile_coords.x * w + tile_coords.y) as usize
+    }
+
+    fn is_in_bounds(&self, tile_coords: &GridCoords) -> bool {
+        let x = tile_coords.x;
+        let y = tile_coords.y;
+
+        x >= 0 && y >= 0 && x < self.world.width && y < self.world.height
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{GridCoords, TileType, Visibility, World};
+    use crate::{GridCoords, Visibility, World};
 
     #[test]
     #[should_panic]
@@ -91,7 +109,7 @@ mod tests {
     }
 
     #[test]
-    fn returns_true_for_itself() {
+    fn returns_true_for_one_sized_world() {
         let tiles: Vec<char> = vec!['_'];
         let world = World {
             tiles: tiles.iter().map(|value| value.into()).collect(),
@@ -113,13 +131,20 @@ mod tests {
         assert!(is_visible);
     }
 
+    // @/x _
+    //  _  _
     #[test]
-    fn returns_true_for_visible_tile() {
-        let tiles = vec!['_', '_'];
+    fn returns_true_for_itself() {
+        #[rustfmt::skip]
+        let tiles = vec![
+            '_', '_',
+            '_', '_'
+        ];
+
         let world = World {
             tiles: tiles.iter().map(|value| value.into()).collect(),
             width: 2,
-            height: 1,
+            height: 2,
         };
 
         let visibility = Visibility {
@@ -136,9 +161,17 @@ mod tests {
         assert!(is_visible);
     }
 
+    // @  _  _
+    // _  o  _
+    // _  _  x
     #[test]
     fn returns_false_for_hidden_tile() {
-        let tiles = vec!['_', 'x', '_'];
+        #[rustfmt::skip]
+        let tiles = vec![
+            '_', '_', '_',
+            '_', 'o', '_',
+            '_', '_', '_'
+        ];
 
         let world = World {
             tiles: tiles.iter().map(|value| value.into()).collect(),
@@ -154,7 +187,7 @@ mod tests {
 
         let observer = GridCoords { x: 0, y: 0 };
 
-        let tile = GridCoords { x: 2, y: 0 };
+        let tile = GridCoords { x: 2, y: 2 };
 
         let is_visible = visibility.is_tile_visible(&observer, &tile);
         assert!(is_visible);
