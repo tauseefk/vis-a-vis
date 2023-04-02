@@ -1,6 +1,87 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, f32::INFINITY};
 
-fn main() {}
+fn main() {
+    #[rustfmt::skip]
+        let tiles = vec![
+            '_', '_', '_', '_', '_',
+            '_', '_', '_', '_', '_',
+            '_', '_', '_', '_', '_',
+            '_', '_', '_', '_', '_',
+            '_', '_', '_', '_', '_'
+        ];
+
+    let tiles = tiles.iter().map(|value| value.into()).collect();
+    let world = World {
+        tiles,
+        width: 3,
+        height: 3,
+    };
+
+    let visibility = Visibility::new(&world, false, 4);
+
+    let coords = vec![
+        [
+            GridCoords { x: 0, y: 4 },
+            GridCoords { x: 1, y: 4 },
+            GridCoords { x: 2, y: 4 },
+            GridCoords { x: 3, y: 4 },
+            GridCoords { x: 4, y: 4 },
+        ],
+        [
+            GridCoords { x: 0, y: 3 },
+            GridCoords { x: 1, y: 3 },
+            GridCoords { x: 2, y: 3 },
+            GridCoords { x: 3, y: 3 },
+            GridCoords { x: 4, y: 3 },
+        ],
+        [
+            GridCoords { x: 0, y: 2 },
+            GridCoords { x: 1, y: 2 },
+            GridCoords { x: 2, y: 2 },
+            GridCoords { x: 3, y: 2 },
+            GridCoords { x: 4, y: 2 },
+        ],
+        [
+            GridCoords { x: 0, y: 1 },
+            GridCoords { x: 1, y: 1 },
+            GridCoords { x: 2, y: 1 },
+            GridCoords { x: 3, y: 1 },
+            GridCoords { x: 4, y: 1 },
+        ],
+        [
+            GridCoords { x: 0, y: 0 },
+            GridCoords { x: 1, y: 0 },
+            GridCoords { x: 2, y: 0 },
+            GridCoords { x: 3, y: 0 },
+            GridCoords { x: 4, y: 0 },
+        ],
+    ];
+
+    let slopes: Vec<Vec<f32>> = vec![
+        vec![INFINITY, 4.00, 2.00, 1.33, 1.00],
+        vec![INFINITY, 3.00, 1.50, 1.00, 0.75],
+        vec![INFINITY, 2.00, 1.00, 0.67, 0.50],
+        vec![INFINITY, 1.00, 0.50, 0.33, 0.25],
+        vec![0.00, 0.00, 0.00, 0.00, 0.00],
+    ];
+    for i in 0..5 {
+        for j in 0..5 {
+            let coord = &coords[i][j];
+            let slope = visibility.slope(&coord, crate::Pivot::Center);
+            print!("{:.2}  ", slope);
+        }
+        println!("");
+    }
+
+    for i in 0..5 {
+        for j in 0..5 {
+            let slope = slopes[i][j];
+            let coord = visibility.point_on_scan_line(4 - i as i32, slope);
+            print!("({},{})  ", coord.x, coord.y);
+        }
+        println!("");
+    }
+}
 
 pub struct World {
     pub tiles: Vec<TileType>,
@@ -142,10 +223,17 @@ impl<'test> Visibility<'test> {
     // assuming we're only concerned with the north - north - east octant
     // we're moving upwards so x = y * m;
     fn point_on_scan_line(&self, depth: i32, slope: f32) -> GridCoords<i32> {
-        let y = depth;
-        let x = y as f32 * slope;
+        if slope.is_infinite() {
+            GridCoords {
+                x: self.observer.x,
+                y: self.observer.y + depth,
+            }
+        } else {
+            let y = self.observer.y + depth;
+            let x = y as f32 / slope;
 
-        GridCoords { x: x as i32, y }
+            GridCoords { x: x as i32, y }
+        }
     }
 
     pub fn compute_visible_tiles(&mut self) -> HashSet<GridCoords<i32>> {
@@ -315,13 +403,6 @@ mod tests {
         };
 
         let mut visibility = Visibility::new(&world, false, 4);
-
-        let observer = GridCoords { x: 0, y: 0 };
-
-        let tile = GridCoords { x: 2, y: 2 };
-
-        // let is_visible = visibility.is_tile_visible(&observer, &tile);
-        // assert!(is_visible);
 
         let visible_tiles = visibility.compute_visible_tiles();
         let visible_tiles: Vec<GridCoords<i32>> = visible_tiles.into_iter().collect();
