@@ -11,9 +11,27 @@ pub struct World {
 }
 
 #[derive(PartialEq)]
-pub struct GridCoords {
-    pub x: i32,
-    pub y: i32,
+pub struct GridCoords<T> {
+    pub x: T,
+    pub y: T,
+}
+
+impl From<&GridCoords<i32>> for GridCoords<f32> {
+    fn from(value: &GridCoords<i32>) -> Self {
+        GridCoords {
+            x: value.x as f32,
+            y: value.y as f32,
+        }
+    }
+}
+
+impl From<&GridCoords<f32>> for GridCoords<i32> {
+    fn from(value: &GridCoords<f32>) -> Self {
+        GridCoords {
+            x: (value.x as i32).max(0),
+            y: (value.y as i32).max(0),
+        }
+    }
 }
 
 pub enum TileType {
@@ -31,12 +49,45 @@ impl From<&char> for TileType {
     }
 }
 
+pub enum Pivot {
+    Center,
+    TopRight,
+    BottomRight,
+    BottomLeft,
+    TopLeft,
+}
+
+impl Pivot {
+    pub fn coords(&self, tile_coords: &GridCoords<i32>) -> GridCoords<f32> {
+        let tile_coords_f: GridCoords<f32> = tile_coords.into();
+        match self {
+            Pivot::Center => tile_coords_f,
+            Pivot::TopRight => GridCoords {
+                x: tile_coords_f.x + 0.5,
+                y: tile_coords_f.y + 0.5,
+            },
+            Pivot::BottomRight => GridCoords {
+                x: tile_coords_f.x + 0.5,
+                y: tile_coords_f.y - 0.5,
+            },
+            Pivot::BottomLeft => GridCoords {
+                x: tile_coords_f.x - 0.5,
+                y: tile_coords_f.y - 0.5,
+            },
+            Pivot::TopLeft => GridCoords {
+                x: tile_coords_f.x - 0.5,
+                y: tile_coords_f.y + 0.5,
+            },
+        }
+    }
+}
+
 pub struct Visibility<'test> {
     world: &'test World,
     is_omniscient: bool,
     max_visible_distance: i32,
-    visible_tiles: HashSet<GridCoords>,
-    observer: GridCoords,
+    visible_tiles: HashSet<GridCoords<i32>>,
+    observer: GridCoords<i32>,
 }
 
 impl<'test> Visibility<'test> {
@@ -50,7 +101,11 @@ impl<'test> Visibility<'test> {
         }
     }
 
-    pub fn is_tile_visible(&self, observer_coords: &GridCoords, tile_coords: &GridCoords) -> bool {
+    pub fn is_tile_visible(
+        &self,
+        observer_coords: &GridCoords<i32>,
+        tile_coords: &GridCoords<i32>,
+    ) -> bool {
         // TODO: this should prob happen at the world construction
         if self.world.tiles.len() < 1 {
             panic!("World is too small.");
@@ -75,20 +130,20 @@ impl<'test> Visibility<'test> {
         }
     }
 
-    fn slope(&self, tile: &GridCoords) -> f32 {
+    fn slope(&self, tile: &GridCoords<i32>, pivot: Pivot) -> f32 {
         return (tile.y - self.observer.y) as f32 / (tile.x - self.observer.y) as f32;
     }
 
     // assuming we're only concerned with the north - north - east octant
     // we're moving upwards so x = y * m;
-    fn point_on_scan_line(&self, depth: i32, slope: f32) -> GridCoords {
+    fn point_on_scan_line(&self, depth: i32, slope: f32) -> GridCoords<i32> {
         let y = depth;
         let x = y as f32 * slope;
 
         GridCoords { x: x as i32, y }
     }
 
-    pub fn compute_visible_tiles(&self) -> HashSet<GridCoords> {
+    pub fn compute_visible_tiles(&self) -> HashSet<GridCoords<i32>> {
         HashSet::new()
     }
 
@@ -101,7 +156,7 @@ impl<'test> Visibility<'test> {
     ) {
     }
 
-    fn grid_coord_to_idx(&self, tile_coords: &GridCoords) -> usize {
+    fn grid_coord_to_idx(&self, tile_coords: &GridCoords<i32>) -> usize {
         if !self.is_in_bounds(tile_coords) {
             panic!("Tile not in bounds");
         }
@@ -111,7 +166,7 @@ impl<'test> Visibility<'test> {
         (tile_coords.x * w + tile_coords.y) as usize
     }
 
-    fn is_in_bounds(&self, tile_coords: &GridCoords) -> bool {
+    fn is_in_bounds(&self, tile_coords: &GridCoords<i32>) -> bool {
         let x = tile_coords.x;
         let y = tile_coords.y;
 
