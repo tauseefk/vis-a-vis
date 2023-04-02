@@ -1,8 +1,6 @@
 use std::collections::HashSet;
 
-fn main() {
-    println!("Hello, world!");
-}
+fn main() {}
 
 pub struct World {
     pub tiles: Vec<TileType>,
@@ -10,7 +8,7 @@ pub struct World {
     pub height: i32,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct GridCoords<T> {
     pub x: T,
     pub y: T,
@@ -34,6 +32,7 @@ impl From<&GridCoords<f32>> for GridCoords<i32> {
     }
 }
 
+#[derive(Clone, PartialEq)]
 pub enum TileType {
     Transparent,
     Opaque,
@@ -130,8 +129,14 @@ impl<'test> Visibility<'test> {
         }
     }
 
-    fn slope(&self, tile: &GridCoords<i32>, pivot: Pivot) -> f32 {
-        return (tile.y - self.observer.y) as f32 / (tile.x - self.observer.y) as f32;
+    fn get_tile_type(&self, tile_coords: &GridCoords<i32>) -> TileType {
+        let idx = self.grid_coord_to_idx(tile_coords);
+        self.world.tiles[idx].clone()
+    }
+
+    pub fn slope(&self, tile: &GridCoords<i32>, pivot: Pivot) -> f32 {
+        let target = pivot.coords(tile);
+        return (target.y - self.observer.y as f32) / (target.x - self.observer.x as f32);
     }
 
     // assuming we're only concerned with the north - north - east octant
@@ -143,17 +148,64 @@ impl<'test> Visibility<'test> {
         GridCoords { x: x as i32, y }
     }
 
-    pub fn compute_visible_tiles(&self) -> HashSet<GridCoords<i32>> {
-        HashSet::new()
+    pub fn compute_visible_tiles(&mut self) -> HashSet<GridCoords<i32>> {
+        self.compute_visible_tiles_in_octant(1, 0., 1.);
+        self.visible_tiles.clone()
     }
 
     fn compute_visible_tiles_in_octant(
-        &self,
+        &mut self,
         // observer: &GridCoords, this doesn't change during each call
         current_depth: i32,
         min_slope: f32,
         max_slope: f32,
     ) {
+        let mut is_first = true;
+        let mut previous = self.point_on_scan_line(current_depth, min_slope);
+        let mut current = self.point_on_scan_line(current_depth, min_slope);
+        let end = self.point_on_scan_line(current_depth, max_slope);
+
+        while current.x < end.x {
+            self.visible_tiles.insert(current.clone());
+
+            match (
+                is_first,
+                self.get_tile_type(&previous),
+                self.get_tile_type(&current),
+            ) {
+                // first opaque cell after at least one transparent
+                (false, TileType::Transparent, TileType::Opaque) => {
+                    let next_max_slope = self.slope(&current, Pivot::TopLeft);
+                    self.compute_visible_tiles_in_octant(
+                        current_depth + 1,
+                        min_slope,
+                        next_max_slope,
+                    );
+                }
+                // first transparent cell after at least one opaque
+                (false, TileType::Opaque, TileType::Transparent) => {
+                    let next_max_slope = self.slope(&current, Pivot::TopLeft);
+                    self.compute_visible_tiles_in_octant(
+                        current_depth + 1,
+                        min_slope,
+                        next_max_slope,
+                    );
+                }
+                // do nothing
+                (false, TileType::Transparent, TileType::Transparent) => {}
+                (false, TileType::Opaque, TileType::Opaque) => {}
+                (true, _, _) => {
+                    is_first = false;
+                }
+            };
+            previous = current.clone();
+            current.x += 1;
+        }
+        // TODO: uncomment after encountering the edge case
+        // see through last group of transparent cells in a row
+        // if self.get_tile_type(&previous) == TileType::Transparent {
+        //     self.compute_visible_tiles_in_octant(current_depth + 1, min_slope, max_slope);
+        // }
     }
 
     fn grid_coord_to_idx(&self, tile_coords: &GridCoords<i32>) -> usize {
@@ -176,6 +228,8 @@ impl<'test> Visibility<'test> {
 
 #[cfg(test)]
 mod tests {
+    use std::f32::INFINITY;
+
     use crate::{GridCoords, Visibility, World};
 
     #[test]
@@ -246,27 +300,100 @@ mod tests {
     // _  o  _
     // _  _  x
     #[test]
-    fn returns_false_for_hidden_tile() {
+    fn returns_all_visible_tiles() {
         #[rustfmt::skip]
         let tiles = vec![
             '_', '_', '_',
-            '_', 'o', '_',
+            '_', '_', '_',
             '_', '_', '_'
         ];
 
         let world = World {
             tiles: tiles.iter().map(|value| value.into()).collect(),
             width: 3,
-            height: 1,
+            height: 3,
         };
 
-        let visibility = Visibility::new(&world, false, 3);
+        let mut visibility = Visibility::new(&world, false, 4);
 
         let observer = GridCoords { x: 0, y: 0 };
 
         let tile = GridCoords { x: 2, y: 2 };
 
-        let is_visible = visibility.is_tile_visible(&observer, &tile);
-        assert!(is_visible);
+        // let is_visible = visibility.is_tile_visible(&observer, &tile);
+        // assert!(is_visible);
+
+        let visible_tiles = visibility.compute_visible_tiles();
+        let visible_tiles: Vec<GridCoords<i32>> = visible_tiles.into_iter().collect();
+        assert_eq!(visible_tiles, [])
+    }
+
+    // _  _  _
+    // _  _  _
+    // @  _  _
+    // tile columns is reversed coz vec indices are ordered ascending
+    #[test]
+    fn get_slopes() {
+        #[rustfmt::skip]
+        let tiles = vec![
+            '_', '_', '_', '_',
+            '_', '_', '_', '_',
+            '_', '_', '_', '_',
+            '_', '_', '_', '_'
+        ];
+
+        let tiles = tiles.iter().map(|value| value.into()).collect();
+        let world = World {
+            tiles,
+            width: 3,
+            height: 3,
+        };
+
+        let visibility = Visibility::new(&world, false, 4);
+
+        let coords = vec![
+            [
+                GridCoords { x: 0, y: 3 },
+                GridCoords { x: 1, y: 3 },
+                GridCoords { x: 2, y: 3 },
+                GridCoords { x: 3, y: 3 },
+            ],
+            [
+                GridCoords { x: 0, y: 2 },
+                GridCoords { x: 1, y: 2 },
+                GridCoords { x: 2, y: 2 },
+                GridCoords { x: 3, y: 2 },
+            ],
+            [
+                GridCoords { x: 0, y: 1 },
+                GridCoords { x: 1, y: 1 },
+                GridCoords { x: 2, y: 1 },
+                GridCoords { x: 3, y: 1 },
+            ],
+            [
+                GridCoords { x: 0, y: 0 },
+                GridCoords { x: 1, y: 0 },
+                GridCoords { x: 2, y: 0 },
+                GridCoords { x: 3, y: 0 },
+            ],
+        ];
+
+        let slopes = vec![
+            vec![INFINITY, 3.00, 1.50, 1.00],
+            vec![INFINITY, 2.00, 1.00, 0.67],
+            vec![INFINITY, 1.00, 0.50, 0.33],
+            vec![0.00, 0.00, 0.00, 0.00],
+        ];
+
+        for i in 0..4 {
+            for j in 0..4 {
+                let coord = &coords[i][j];
+                let slope = visibility.slope(&coord, crate::Pivot::Center);
+                if !slope.is_nan() && !slope.is_infinite() {
+                    let abs_diff = (slope - slopes[i][j]).abs();
+                    assert!(abs_diff < 0.01);
+                }
+            }
+        }
     }
 }
