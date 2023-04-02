@@ -13,11 +13,11 @@ fn main() {
     let tiles = tiles.iter().map(|value| value.into()).collect();
     let world = World {
         tiles,
-        width: 3,
-        height: 3,
+        width: 5,
+        height: 5,
     };
 
-    let visibility = Visibility::new(&world, false, 4);
+    let mut visibility = Visibility::new(&world, false, 4);
 
     let coords = vec![
         [
@@ -81,6 +81,9 @@ fn main() {
         }
         println!("");
     }
+
+    let vis_tiles = visibility.compute_visible_tiles();
+    println!("{:?}", vis_tiles);
 }
 
 pub struct World {
@@ -226,13 +229,13 @@ impl<'test> Visibility<'test> {
         if slope.is_infinite() {
             GridCoords {
                 x: self.observer.x,
-                y: self.observer.y + depth,
+                y: (self.observer.y + depth).min(self.max_visible_distance),
             }
         } else {
-            let y = self.observer.y + depth;
-            let x = y as f32 / slope;
+            let x = (self.observer.x + depth).min(self.max_visible_distance);
+            let y = (x as f32 * slope).min(self.max_visible_distance as f32);
 
-            GridCoords { x: x as i32, y }
+            GridCoords { x, y: y as i32 }
         }
     }
 
@@ -245,15 +248,21 @@ impl<'test> Visibility<'test> {
         &mut self,
         // observer: &GridCoords, this doesn't change during each call
         current_depth: i32,
-        min_slope: f32,
+        mut min_slope: f32,
         max_slope: f32,
     ) {
+        if current_depth > self.max_visible_distance {
+            return;
+        }
+
         let mut is_first = true;
         let mut previous = self.point_on_scan_line(current_depth, min_slope);
         let mut current = self.point_on_scan_line(current_depth, min_slope);
         let end = self.point_on_scan_line(current_depth, max_slope);
 
-        while current.x < end.x {
+        println!("Depth: {} {:?} {:?}", current_depth, current, end);
+        while current.y < end.y {
+            println!("adding current to visible");
             self.visible_tiles.insert(current.clone());
 
             match (
@@ -263,7 +272,7 @@ impl<'test> Visibility<'test> {
             ) {
                 // first opaque cell after at least one transparent
                 (false, TileType::Transparent, TileType::Opaque) => {
-                    let next_max_slope = self.slope(&current, Pivot::TopLeft);
+                    let next_max_slope = self.slope(&current, Pivot::BottomRight);
                     self.compute_visible_tiles_in_octant(
                         current_depth + 1,
                         min_slope,
@@ -272,12 +281,7 @@ impl<'test> Visibility<'test> {
                 }
                 // first transparent cell after at least one opaque
                 (false, TileType::Opaque, TileType::Transparent) => {
-                    let next_max_slope = self.slope(&current, Pivot::TopLeft);
-                    self.compute_visible_tiles_in_octant(
-                        current_depth + 1,
-                        min_slope,
-                        next_max_slope,
-                    );
+                    min_slope = self.slope(&current, Pivot::TopLeft);
                 }
                 // do nothing
                 (false, TileType::Transparent, TileType::Transparent) => {}
@@ -287,13 +291,13 @@ impl<'test> Visibility<'test> {
                 }
             };
             previous = current.clone();
-            current.x += 1;
+            current.y += 1;
         }
         // TODO: uncomment after encountering the edge case
         // see through last group of transparent cells in a row
-        // if self.get_tile_type(&previous) == TileType::Transparent {
-        //     self.compute_visible_tiles_in_octant(current_depth + 1, min_slope, max_slope);
-        // }
+        if self.get_tile_type(&previous) == TileType::Transparent {
+            self.compute_visible_tiles_in_octant(current_depth + 1, min_slope, max_slope);
+        }
     }
 
     fn grid_coord_to_idx(&self, tile_coords: &GridCoords<i32>) -> usize {
