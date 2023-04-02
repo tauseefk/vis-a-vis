@@ -35,9 +35,21 @@ pub struct Visibility<'test> {
     world: &'test World,
     is_omniscient: bool,
     max_visible_distance: i32,
+    visible_tiles: HashSet<GridCoords>,
+    observer: GridCoords,
 }
 
 impl<'test> Visibility<'test> {
+    pub fn new(world: &'test World, is_omniscient: bool, max_visible_distance: i32) -> Self {
+        Self {
+            world,
+            is_omniscient,
+            max_visible_distance,
+            visible_tiles: HashSet::new(),
+            observer: GridCoords { x: 0, y: 0 },
+        }
+    }
+
     pub fn is_tile_visible(&self, observer_coords: &GridCoords, tile_coords: &GridCoords) -> bool {
         // TODO: this should prob happen at the world construction
         if self.world.tiles.len() < 1 {
@@ -52,6 +64,10 @@ impl<'test> Visibility<'test> {
             panic!("Can't see shit!");
         }
 
+        if !self.is_in_bounds(observer_coords) && !self.is_in_bounds(tile_coords) {
+            panic!("Coordinate out of bounds!");
+        }
+
         if self.world.tiles.len() == 1 || *observer_coords == *tile_coords || self.is_omniscient {
             true
         } else {
@@ -59,8 +75,30 @@ impl<'test> Visibility<'test> {
         }
     }
 
-    pub fn compute_visible_tiles(&self, _observer_coords: &GridCoords) -> HashSet<GridCoords> {
+    fn slope(&self, tile: &GridCoords) -> f32 {
+        return (tile.y - self.observer.y) as f32 / (tile.x - self.observer.y) as f32;
+    }
+
+    // assuming we're only concerned with the north - north - east octant
+    // we're moving upwards so x = y * m;
+    fn point_on_scan_line(&self, depth: i32, slope: f32) -> GridCoords {
+        let y = depth;
+        let x = y as f32 * slope;
+
+        GridCoords { x: x as i32, y }
+    }
+
+    pub fn compute_visible_tiles(&self) -> HashSet<GridCoords> {
         HashSet::new()
+    }
+
+    fn compute_visible_tiles_in_octant(
+        &self,
+        // observer: &GridCoords, this doesn't change during each call
+        current_depth: i32,
+        min_slope: f32,
+        max_slope: f32,
+    ) {
     }
 
     fn grid_coord_to_idx(&self, tile_coords: &GridCoords) -> usize {
@@ -94,11 +132,7 @@ mod tests {
             height: 0,
         };
 
-        let visibility = Visibility {
-            world: &world,
-            max_visible_distance: 3,
-            is_omniscient: false,
-        };
+        let visibility = Visibility::new(&world, false, 3);
 
         let observer = GridCoords { x: 0, y: 0 };
 
@@ -117,11 +151,7 @@ mod tests {
             height: 1,
         };
 
-        let visibility = Visibility {
-            world: &world,
-            max_visible_distance: 3,
-            is_omniscient: false,
-        };
+        let visibility = Visibility::new(&world, false, 3);
 
         let observer = GridCoords { x: 0, y: 0 };
 
@@ -147,11 +177,7 @@ mod tests {
             height: 2,
         };
 
-        let visibility = Visibility {
-            world: &world,
-            max_visible_distance: 3,
-            is_omniscient: false,
-        };
+        let visibility = Visibility::new(&world, false, 3);
 
         let observer = GridCoords { x: 0, y: 0 };
 
@@ -179,11 +205,7 @@ mod tests {
             height: 1,
         };
 
-        let visibility = Visibility {
-            world: &world,
-            max_visible_distance: 3,
-            is_omniscient: false,
-        };
+        let visibility = Visibility::new(&world, false, 3);
 
         let observer = GridCoords { x: 0, y: 0 };
 
