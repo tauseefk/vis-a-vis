@@ -223,8 +223,19 @@ impl<'test> Visibility<'test> {
         return (target.y - self.observer.y as f32) / (target.x - self.observer.x as f32);
     }
 
-    // assuming we're only concerned with the north - north - east octant
-    // we're moving upwards so x = y * m;
+    /// 4\33333|22222/1
+    /// 44\3333|2222/11
+    /// 444\333|222/111
+    /// 4444\33|22/1111
+    /// 44444\3|2/11111
+    /// ------@_@------
+    /// 55555/6|7\88888
+    /// 5555/66|77\8888
+    /// 555/666|777\888
+    /// 55/6666|7777\88
+    /// 5/66666|77777\8
+    /// assuming we're only concerned with the octant 1
+    /// scan lines are vertical so y = mx
     fn point_on_scan_line(&self, depth: i32, slope: f32) -> GridCoords<i32> {
         if slope.is_infinite() {
             GridCoords {
@@ -260,7 +271,6 @@ impl<'test> Visibility<'test> {
         let mut current = self.point_on_scan_line(current_depth, min_slope);
         let end = self.point_on_scan_line(current_depth, max_slope);
 
-        println!("Depth: {} {:?} {:?}", current_depth, current, end);
         while current.y < end.y {
             println!("adding current to visible");
             self.visible_tiles.insert(current.clone());
