@@ -6,7 +6,7 @@ fn main() {
             '_', '_', '_', '_', '_',
             '_', '_', '_', '_', '_',
             '_', '_', '_', '_', '_',
-            '_', '_', '_', '_', '_',
+            '_', 'x', '_', '_', '_',
             '_', '_', '_', '_', '_'
         ];
 
@@ -127,7 +127,7 @@ impl From<&char> for TileType {
         match value {
             'o' => TileType::Opaque,
             '_' => TileType::Transparent,
-            _ => panic!("Encountered improbably tiletype"),
+            _ => panic!("Encountered improbable tiletype"),
         }
     }
 }
